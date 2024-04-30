@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/eutrophication" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
