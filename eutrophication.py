@@ -171,8 +171,32 @@ class NecMinSR:
             callback=self.run,
             parent=self.iface.mainWindow())
 
+        #adicionar saída
         self.dlg.label_output.clear() 
         self.dlg.bt_output.clicked.connect(self.path_out)
+
+        #atualiza lista de layers
+        self.dlg.bt_update.clicked.connect(self.update_layers)
+
+        #seleciona banda verde
+        self.dlg.band_green.clear()
+        self.dlg.band_green.currentIndexChanged.connect(self.select_band_green)
+
+        #seleciona banda blue
+        self.dlg.band_blue.clear()
+        self.dlg.band_blue.currentIndexChanged.connect(self.select_band_blue)
+
+        #seleciona banda red
+        self.dlg.band_red.clear()
+        self.dlg.band_red.currentIndexChanged.connect(self.select_band_red)
+
+        #seleciona banda mid
+        self.dlg.band_mid.clear()
+        self.dlg.band_mid.currentIndexChanged.connect(self.select_band_mid)
+
+        #seleciona banda mear
+        self.dlg.band_mear.clear()
+        self.dlg.band_mear.currentIndexChanged.connect(self.select_band_mear)
 
         # will be set False in run()
         self.first_start = True
@@ -190,8 +214,71 @@ class NecMinSR:
         global path
         global path_output
         path = QFileDialog.getSaveFileName(self.dlg, "Salvar o   arquivo em: ", "", "*.TIF"),
-        self.dlg.label_output.setText(path[0])
-        path_output=path[0]
+        path_output=path[0][0]
+        self.dlg.label_output.setText(path_output)
+
+    def update_layers(self):
+        a=QgsProject.instance()
+        layers_names=[]
+        global layers_source
+        layers_source=[]
+
+        for layer in a.mapLayers().values():
+            layers_names.append(layer.name())
+            layers_source.append(layer.source())
+        if(len(layers_names)>0):
+            self.dlg.band_green.clear()
+            self.dlg.band_blue.clear()
+            self.dlg.band_red.clear()
+            self.dlg.band_mid.clear()
+            self.dlg.band_mear.clear()
+            self.dlg.band_green.addItems(layers_names)
+            self.dlg.band_blue.addItems(layers_names)
+            self.dlg.band_red.addItems(layers_names)
+            self.dlg.band_mid.addItems(layers_names)
+            self.dlg.band_mear.addItems(layers_names)
+
+    def select_band_green(self): 
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.band_green.currentIndex()
+            global layers_source_green
+            layers_source_green=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_green.setText(layers_source_green)
+            self.dlg.label_green.setText(layers_source_green)
+
+    def select_band_blue(self): 
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.band_blue.currentIndex()
+            global layers_source_blue
+            layers_source_blue=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_blue.setText(layers_source_blue)
+            self.dlg.label_blue.setText(layers_source_blue)
+
+    def select_band_red(self): 
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.band_red.currentIndex()
+            global layers_source_red
+            layers_source_red=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_red.setText(layers_source_red)
+            self.dlg.label_red.setText(layers_source_red)
+
+    def select_band_mid(self): 
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.band_mid.currentIndex()
+            global layers_source_mid
+            layers_source_mid=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_mid.setText(layers_source_mid)
+            self.dlg.label_mid.setText(layers_source_mid)
+
+    def select_band_mear(self): 
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.band_mear.currentIndex()
+            global layers_source_mear
+            layers_source_mear=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_mear.setText(layers_source_mear)
+            self.dlg.label_mear.setText(layers_source_mear)
+           
+           
 
     def run(self):
         """Run method that performs all the real work"""
