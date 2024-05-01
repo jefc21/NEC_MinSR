@@ -71,9 +71,9 @@
      </widget>
     </item>
     <item>
-     <widget class="QLabel" name="label_mear">
+     <widget class="QLabel" name="label_near">
       <property name="text">
-       <string>Mear Infrared</string>
+       <string>Near Infrared</string>
       </property>
      </widget>
     </item>
@@ -116,7 +116,7 @@
      <widget class="QComboBox" name="band_mid"/>
     </item>
     <item>
-     <widget class="QComboBox" name="band_mear"/>
+     <widget class="QComboBox" name="band_near"/>
     </item>
     <item>
      <widget class="QComboBox" name="training"/>
@@ -166,7 +166,7 @@
      <widget class="QLineEdit" name="lineEdit_mid"/>
     </item>
     <item>
-     <widget class="QLineEdit" name="lineEdit_mear"/>
+     <widget class="QLineEdit" name="lineEdit_near"/>
     </item>
     <item>
      <widget class="QLineEdit" name="lineEdit_training"/>
@@ -194,6 +194,19 @@
    </property>
    <property name="text">
     <string>Update</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="player">
+   <property name="geometry">
+    <rect>
+     <x>360</x>
+     <y>60</y>
+     <width>41</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Player</string>
    </property>
   </widget>
  </widget>

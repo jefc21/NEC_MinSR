@@ -32,6 +32,9 @@ from .resources import *
 from .eutrophication_dialog import NecMinSRDialog
 import os.path
 
+import processing
+from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+
 
 
 class NecMinSR:
@@ -69,6 +72,7 @@ class NecMinSR:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -194,9 +198,11 @@ class NecMinSR:
         self.dlg.band_mid.clear()
         self.dlg.band_mid.currentIndexChanged.connect(self.select_band_mid)
 
-        #seleciona banda mear
-        self.dlg.band_mear.clear()
-        self.dlg.band_mear.currentIndexChanged.connect(self.select_band_mear)
+        #seleciona banda near
+        self.dlg.band_near.clear()
+        self.dlg.band_near.currentIndexChanged.connect(self.select_band_near)
+
+        self.dlg.player.clicked.connect(self.rodar)
 
         # will be set False in run()
         self.first_start = True
@@ -209,6 +215,16 @@ class NecMinSR:
                 self.tr(u'&NEC_MinSR'),
                 action)
             self.iface.removeToolBarIcon(action)
+    
+    def rodar(self):
+        out = "C:/Users/ericc/OneDrive/Imagens/Saved Pictures/saida_"
+        band_green = self.dlg.lineEdit_green.text()
+        band_mid = self.dlg.lineEdit_mid.text()
+        band_near = self.dlg.lineEdit_near.text()
+
+        self.calculator([band_mid, band_green], out+"NDVI.TIF", type="default")
+        self.calculator([band_green, band_near], out+"MNDWI.TIF", type="default")
+        self.calculator([out+"NDVI.TIF", out+"MNDWI.TIF"], out+"NDVI_MNDWI.TIF", type="mult")
 
     def path_out(self):
         global path
@@ -222,6 +238,7 @@ class NecMinSR:
         layers_names=[]
         global layers_source
         layers_source=[]
+        algorithms = ["SVM", "KNN", "NB", "AD"]
 
         for layer in a.mapLayers().values():
             layers_names.append(layer.name())
@@ -231,12 +248,14 @@ class NecMinSR:
             self.dlg.band_blue.clear()
             self.dlg.band_red.clear()
             self.dlg.band_mid.clear()
-            self.dlg.band_mear.clear()
+            self.dlg.band_near.clear()
             self.dlg.band_green.addItems(layers_names)
             self.dlg.band_blue.addItems(layers_names)
             self.dlg.band_red.addItems(layers_names)
             self.dlg.band_mid.addItems(layers_names)
-            self.dlg.band_mear.addItems(layers_names)
+            self.dlg.band_near.addItems(layers_names)
+            
+        self.dlg.bt_algorithm.addItems(algorithms)
 
     def select_band_green(self): 
         if(len(layers_source)>0):
@@ -244,7 +263,6 @@ class NecMinSR:
             global layers_source_green
             layers_source_green=layers_source[selectedLayerIndex].replace( '\\' , '/')
             self.dlg.lineEdit_green.setText(layers_source_green)
-            self.dlg.label_green.setText(layers_source_green)
 
     def select_band_blue(self): 
         if(len(layers_source)>0):
@@ -252,7 +270,6 @@ class NecMinSR:
             global layers_source_blue
             layers_source_blue=layers_source[selectedLayerIndex].replace( '\\' , '/')
             self.dlg.lineEdit_blue.setText(layers_source_blue)
-            self.dlg.label_blue.setText(layers_source_blue)
 
     def select_band_red(self): 
         if(len(layers_source)>0):
@@ -260,7 +277,6 @@ class NecMinSR:
             global layers_source_red
             layers_source_red=layers_source[selectedLayerIndex].replace( '\\' , '/')
             self.dlg.lineEdit_red.setText(layers_source_red)
-            self.dlg.label_red.setText(layers_source_red)
 
     def select_band_mid(self): 
         if(len(layers_source)>0):
@@ -268,16 +284,67 @@ class NecMinSR:
             global layers_source_mid
             layers_source_mid=layers_source[selectedLayerIndex].replace( '\\' , '/')
             self.dlg.lineEdit_mid.setText(layers_source_mid)
-            self.dlg.label_mid.setText(layers_source_mid)
 
-    def select_band_mear(self): 
+    def select_band_near(self): 
         if(len(layers_source)>0):
-            selectedLayerIndex = self.dlg.band_mear.currentIndex()
-            global layers_source_mear
-            layers_source_mear=layers_source[selectedLayerIndex].replace( '\\' , '/')
-            self.dlg.lineEdit_mear.setText(layers_source_mear)
-            self.dlg.label_mear.setText(layers_source_mear)
-           
+            selectedLayerIndex = self.dlg.band_near.currentIndex()
+            global layers_source_near
+            layers_source_near=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_near.setText(layers_source_near)
+
+    def calculator(self, bands, output, type="default"):
+        entries = []
+        #global layers_source_green
+        #global layers_source_infrared
+        #layers_source_green="C:/Users/ericc/OneDrive/Imagens/LC09_L1TP_119038_20240319_20240319_02_T1/LC09_L1TP_119038_20240319_20240319_02_T1_B5.TIF"
+        #layers_source_infrared="C:/Users/ericc/OneDrive/Imagens/LC09_L1TP_119038_20240319_20240319_02_T1/LC09_L1TP_119038_20240319_20240319_02_T1_B3.TIF"
+        layers_source_select=bands#[layers_source_green, layers_source_infrared]
+
+        path_output = output#"C:/Users/ericc/OneDrive/Imagens/Saved Pictures/saida_ndwi.TIF"
+
+        try:
+            if(len(layers_source_select)==2):
+                for i in range(0, len(layers_source_select)):
+
+                    raster = layers_source_select[i]
+                    context = QgsProcessingContext()
+                    context.setProject(QgsProject.instance())
+                    readRst = QgsProcessingUtils.mapLayerFromString(raster, context)
+                    ras1 = QgsRasterCalculatorEntry()
+
+                    ras1.raster = readRst
+                    ras1.ref = "ext_lyr" + str(i+1) +"@1"
+                    ras1.bandNumber = 1
+                    entries.append(ras1)
+
+                if (type=="default"):
+                    formula = ' (' + entries[0].ref + ' - ' + entries[1].ref +')'+ '/' +' (' + entries[0].ref + ' + ' + entries[1].ref +')'
+                else:
+                    formula = ' (' + entries[0].ref + ' * ' + entries[1].ref +')'
+
+                readRst = QgsRasterLayer(layers_source_select[0])
+                #output = "C:/Users/ericc/OneDrive/Imagens/Saved Pictures/saida_ndwi.TIF"
+
+                calc = QgsRasterCalculator(formula, path_output, 'GTiff', readRst.extent(), readRst.width(), readRst.height(), entries)
+                calc.processCalculation()
+
+                layer= QgsRasterLayer(path_output,path_output.split('/')[-1][:-4])
+                QgsProject.instance().addMapLayer(layer)
+
+                renderer = QgsSingleBandGrayRenderer(layer.dataProvider(), 1)
+
+                ce = QgsContrastEnhancement(layer.dataProvider().dataType(0))
+                ce.setContrastEnhancementAlgorithm(QgsContrastEnhancement.StretchToMinimumMaximum)
+
+                ce.setMinimumValue(0)
+                ce.setMaximumValue(1)
+
+                renderer.setContrastEnhancement(ce)
+                layer.setRenderer(renderer)
+
+                layer.triggerRepaint()
+        except:
+            print("Error in Create map", "Can not create Create map, Exit")      
            
 
     def run(self):
@@ -289,6 +356,8 @@ class NecMinSR:
         #    self.first_start = False
         #    self.dlg = NecMinSRDialog()
 
+        self.update_layers()
+
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
@@ -298,3 +367,5 @@ class NecMinSR:
             # Do something useful here - delete the line containing pass and
             # substitute with your code.
             pass
+
+        
