@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QComboBox
 from qgis.core import *
@@ -68,6 +68,8 @@ class NecMinSR:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&NEC_MinSR')
+
+        layers_source_training = ""
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -201,6 +203,10 @@ class NecMinSR:
         #seleciona banda near
         self.dlg.band_near.clear()
         self.dlg.band_near.currentIndexChanged.connect(self.select_band_near)
+    
+        #seleciona samples
+        self.dlg.training.clear()
+        self.dlg.training.currentIndexChanged.connect(self.select_training)
 
         self.dlg.player.clicked.connect(self.rodar)
 
@@ -218,13 +224,21 @@ class NecMinSR:
     
     def rodar(self):
         out = "C:/Users/ericc/OneDrive/Imagens/Saved Pictures/saida_"
+        band_blue = self.dlg.lineEdit_blue.text()
         band_green = self.dlg.lineEdit_green.text()
+        band_red = self.dlg.lineEdit_red.text()
         band_mid = self.dlg.lineEdit_mid.text()
         band_near = self.dlg.lineEdit_near.text()
+        source_samples = self.dlg.lineEdit_training.text()
 
-        self.calculator([band_mid, band_green], out+"NDVI.TIF", type="default")
+        merge = processing.run("gdal:buildvirtualraster", {'INPUT':[band_red,band_green,band_blue],'RESOLUTION':0,'SEPARATE':True,'PROJ_DIFFERENCE':False,'ADD_ALPHA':False,'ASSIGN_CRS':None,'RESAMPLING':0,'SRC_NODATA':'','EXTRA':'','OUTPUT':out+"composition.vrt"})
+        file_samples = self.samples(source_samples, band_green)
+        print(file_samples)
+       
+        self.calculator([band_mid, band_red], out+"NDVI.TIF", type="default")
         self.calculator([band_green, band_near], out+"MNDWI.TIF", type="default")
         self.calculator([out+"NDVI.TIF", out+"MNDWI.TIF"], out+"NDVI_MNDWI.TIF", type="mult")
+
 
     def path_out(self):
         global path
@@ -249,12 +263,15 @@ class NecMinSR:
             self.dlg.band_red.clear()
             self.dlg.band_mid.clear()
             self.dlg.band_near.clear()
+            self.dlg.training.clear()
             self.dlg.band_green.addItems(layers_names)
             self.dlg.band_blue.addItems(layers_names)
             self.dlg.band_red.addItems(layers_names)
             self.dlg.band_mid.addItems(layers_names)
             self.dlg.band_near.addItems(layers_names)
+            self.dlg.training.addItems(layers_names)
             
+        self.dlg.bt_algorithm.clear()
         self.dlg.bt_algorithm.addItems(algorithms)
 
     def select_band_green(self): 
@@ -291,6 +308,51 @@ class NecMinSR:
             global layers_source_near
             layers_source_near=layers_source[selectedLayerIndex].replace( '\\' , '/')
             self.dlg.lineEdit_near.setText(layers_source_near)
+
+    def select_training(self):
+        if(len(layers_source)>0):
+            selectedLayerIndex = self.dlg.training.currentIndex()
+            global layers_source_training
+            layers_source_training=layers_source[selectedLayerIndex].replace( '\\' , '/')
+            self.dlg.lineEdit_training.setText(layers_source_training)
+
+    def samples(self, file_samples, raster):
+        generatepoints = (processing.run("native:generatepointspixelcentroidsinsidepolygons", {'INPUT_RASTER':raster,'INPUT_VECTOR':file_samples,'OUTPUT':'TEMPORARY_OUTPUT'})).get("OUTPUT")
+        layer_samples = QgsVectorLayer(file_samples, file_samples.split("/")[-1], "ogr")
+
+        rotulo = []
+        a=0
+        for feat in layer_samples.getFeatures():
+            if (feat["rotulo"]=="sim"):
+                elem = 1
+            elif(feat["rotulo"]=="nao"):
+                elem = 0
+            rotulo.append([a,elem])
+            a=a+1
+
+        generatepoints.dataProvider().addAttributes([QgsField('x', QVariant.Double)])
+        generatepoints.dataProvider().addAttributes([QgsField('y', QVariant.Double)])
+        generatepoints.dataProvider().addAttributes([QgsField('rotulo', QVariant.Int)])
+        
+        generatepoints.updateFields()
+        prov = generatepoints.dataProvider()
+        generatepoints.startEditing()
+
+        for feat in generatepoints.getFeatures():
+            attrs = feat.attributes()
+            geom = feat.geometry()
+
+            x = geom.asPoint().x()
+            y = geom.asPoint().y()
+            r = rotulo[feat['poly_id']][1]
+
+            feat.setAttribute('x', x)
+            feat.setAttribute('y', y)
+            feat.setAttribute('rotulo',r)
+
+            generatepoints.updateFeature(feat)
+        generatepoints.commitChanges()
+        return generatepoints
 
     def calculator(self, bands, output, type="default"):
         entries = []
