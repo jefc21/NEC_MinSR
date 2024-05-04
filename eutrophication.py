@@ -232,7 +232,7 @@ class NecMinSR:
         source_samples = self.dlg.lineEdit_training.text()
 
         merge = processing.run("gdal:buildvirtualraster", {'INPUT':[band_red,band_green,band_blue],'RESOLUTION':0,'SEPARATE':True,'PROJ_DIFFERENCE':False,'ADD_ALPHA':False,'ASSIGN_CRS':None,'RESAMPLING':0,'SRC_NODATA':'','EXTRA':'','OUTPUT':out+"composition.vrt"})
-        file_samples = self.samples(source_samples, band_green)
+        file_samples = self.samples(source_samples, merge["OUTPUT"])
         print(file_samples)
        
         self.calculator([band_mid, band_red], out+"NDVI.TIF", type="default")
@@ -352,6 +352,9 @@ class NecMinSR:
 
             generatepoints.updateFeature(feat)
         generatepoints.commitChanges()
+
+        generatepoints = processing.run("native:rastersampling", {'INPUT':generatepoints,'RASTERCOPY':raster,'COLUMN_PREFIX':'band_','OUTPUT':'TEMPORARY_OUTPUT'})
+        processing.run("native:exporttospreadsheet", {'LAYERS':[generatepoints["OUTPUT"]],'USE_ALIAS':False,'FORMATTED_VALUES':False,'OUTPUT':'C:/Users/ericc/Downloads/tabela_t3.csv','OVERWRITE':True})
         return generatepoints
 
     def calculator(self, bands, output, type="default"):
