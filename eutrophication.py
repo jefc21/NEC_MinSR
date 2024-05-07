@@ -70,6 +70,7 @@ class NecMinSR:
         self.menu = self.tr(u'&NEC_MinSR')
 
         layers_source_training = ""
+        vlayer = ""
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -230,15 +231,18 @@ class NecMinSR:
         band_mid = self.dlg.lineEdit_mid.text()
         band_near = self.dlg.lineEdit_near.text()
         source_samples = self.dlg.lineEdit_training.text()
+        global vlayer
 
         merge = processing.run("gdal:buildvirtualraster", {'INPUT':[band_red,band_green,band_blue],'RESOLUTION':0,'SEPARATE':True,'PROJ_DIFFERENCE':False,'ADD_ALPHA':False,'ASSIGN_CRS':None,'RESAMPLING':0,'SRC_NODATA':'','EXTRA':'','OUTPUT':out+"composition.vrt"})
-        file_samples = self.samples(source_samples, merge["OUTPUT"])
-        print(file_samples)
+        #file_samples = self.samples(source_samples, merge["OUTPUT"])
+        #print(file_samples)
        
         self.calculator([band_mid, band_red], out+"NDVI.TIF", type="default")
         self.calculator([band_green, band_near], out+"MNDWI.TIF", type="default")
-        self.calculator([out+"NDVI.TIF", out+"MNDWI.TIF"], out+"NDVI_MNDWI.TIF", type="mult")
-
+        NDVI_MNDWI=self.calculator([out+"NDVI.TIF", out+"MNDWI.TIF"], out+"NDVI_MNDWI.TIF", type="mult")
+        print(NDVI_MNDWI)
+        self.calculator([NDVI_MNDWI.source()], out+"NDVI_MNDWI_0_1.TIF", type="filter")
+        self.extract_MNDWI_NDVI(merge, vlayer)
 
     def path_out(self):
         global path
@@ -358,6 +362,9 @@ class NecMinSR:
         return generatepoints
 
     def calculator(self, bands, output, type="default"):
+        print(type)
+
+        global vlayer
         entries = []
         #global layers_source_green
         #global layers_source_infrared
@@ -384,7 +391,7 @@ class NecMinSR:
 
                 if (type=="default"):
                     formula = ' (' + entries[0].ref + ' - ' + entries[1].ref +')'+ '/' +' (' + entries[0].ref + ' + ' + entries[1].ref +')'
-                else:
+                elif(type=="mult"):
                     formula = ' (' + entries[0].ref + ' * ' + entries[1].ref +')'
 
                 readRst = QgsRasterLayer(layers_source_select[0])
@@ -408,9 +415,55 @@ class NecMinSR:
                 layer.setRenderer(renderer)
 
                 layer.triggerRepaint()
+                return layer
+            elif((len(layers_source_select)==1) and (type=="filter") ):
+                print("filter")
+                print(bands[0])
+
+                output_ = processing.run("gdal:rastercalculator", {'INPUT_A':bands[0],'BAND_A':1,'FORMULA':'ceil(A)','NO_DATA':None,'EXTENT_OPT':0,'PROJWIN':None,'RTYPE':5,'OPTIONS':'','EXTRA':'','OUTPUT':'TEMPORARY_OUTPUT'})
+                print(output_)
+                layer= QgsRasterLayer(output_["OUTPUT"],output_["OUTPUT"].split('/')[-1][:-4])
+                print(layer)
+                vlayer = layer
+                QgsProject.instance().addMapLayer(layer)
+
         except:
-            print("Error in Create map", "Can not create Create map, Exit")      
-           
+            print("Error in Create map", "Can not create Create map, Exit")
+
+    def extract_MNDWI_NDVI(self, merge, raster):
+        layer = processing.run("native:pixelstopoints", {'INPUT_RASTER':raster,'RASTER_BAND':1,'FIELD_NAME':'ID','OUTPUT':'TEMPORARY_OUTPUT'})["OUTPUT"]
+        merge = "C:/Users/ericc/AppData/Local/Temp/processing_CDcwLY/fe5930eb0e3349a9808ece8a45c06e49/OUTPUT.tif"
+        NewVector = QgsVectorLayer("Point", "temporary_points", "memory")
+
+        vector = processing.run("native:rastersampling", {'INPUT':layer,'RASTERCOPY':merge,'COLUMN_PREFIX':'band_','OUTPUT':'TEMPORARY_OUTPUT'})
+        vl=vector["OUTPUT"]
+        pr = vl.dataProvider()
+        Prov = NewVector.dataProvider()
+
+        Prov.addAttributes( [QgsField("x",  QVariant.Double),
+                             QgsField("y", QVariant.Double),
+                             QgsField("Band_1", QVariant.Double), 
+                             QgsField("Band_2", QVariant.Double),
+                             QgsField("Band_3", QVariant.Double)] )
+
+        vl.selectByExpression('"ID" = 1', QgsVectorLayer.SetSelection)
+        selection = vl.selectedFeatures()
+        NewVector.startEditing()
+
+        for feature in selection:
+            attrs = feature.attributes()
+            geom = feature.geometry()
+
+            x = geom.asPoint().x()
+            y = geom.asPoint().y()
+
+            f = QgsFeature()
+            f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x,y)))
+            f.setAttributes([x,y,feature["Band_1"],feature["Band_2"],feature["Band_3"]])
+            Prov.addFeatures([f])
+
+        NewVector.commitChanges()
+        QgsProject.instance().addMapLayer(NewVector)  
 
     def run(self):
         """Run method that performs all the real work"""
